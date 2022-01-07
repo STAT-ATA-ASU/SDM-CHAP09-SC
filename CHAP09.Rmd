@@ -1,0 +1,328 @@
+---
+title: "Chapter 9"
+author: "Alan T. Arnholt"
+date: 'Last compiled: `r format(Sys.time(), "%B %d, %Y at %X")`'
+output: bookdown::html_document2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NA, warning = FALSE, message = FALSE, fig.align = "center")
+library(tidyverse)
+library(janitor)
+```
+
+**Objectives:**
+
+I.    Create and interpret multiple linear regression models
+  
+II.   Create 3-D scatterplots
+
+III.  Learn how to create partial regression plots
+
+IV.   Create and interpret additive models
+
+V.    Create and interpret models with interactions
+
+
+# Multiple Regression
+
+Read in the `Bodyfat.csv` data set and store the result in `bf`.
+
+```{r}
+bf <- read.csv("Bodyfat.csv") %>% 
+  clean_names()
+knitr::kable(head(bf))
+```
+
+Reproduce Figure 9.1 from page 282 of your text book.
+
+```{r}
+# Your Code Goes HERE
+
+```
+
+Verify the least squares regression line provided on page 283.
+
+```{r}
+# Your Code Goes HERE
+
+```
+
+The least squares regression line for regressing `pct_bf` onto `waist` is $$\widehat{\text{pct_bf}} = xxx + xxx \times \text{waist}$$
+
+___________
+
+Find the least squares regression equation for regressing `pct_bf` onto `waist` and `height`.  Store the result in `mod_mr`.
+
+```{r}
+# Your Code Goes HERE
+mod_mr <- lm(pct_bf ~ waist + height, data= bf)
+
+```
+
+The least squares regression equation (a plane in this case) for regressing `pct_bf` onto `waist` and `height` is $$\widehat{\text{pct_bf}} = xxx + xxx \times \text{waist} -xxx \times \text{height}$$
+
+## Models in 3-D
+
+An alternative way to visualize a multiple regression model with two numeric explanatory variables is as a plane in three dimensions. This is possible in R using the `plotly` package.
+
+There are three objects you will need:
+
+  * `x`: a vector of unique values of `waist`
+  * `y`: a vector of unique values of `height`
+  * `plane`: a matrix of the fitted values across all combinations of `x` and `y`
+  
+Much like `ggplot()`, the `plot_ly()` function will allow you to create a plot object with variables mapped to `x`, `y`, and `z` aesthetics. The `add_markers()` function is similar to `geom_point()` in that it allows you to add points to your 3D plot.
+
+Note that `plot_ly` uses the pipe (`%>%`) operator to chain commands together.
+
+```{r}
+library(plotly)
+# draw the 3D scatterplot
+p <- plot_ly(data = bf, z = ~pct_bf, x = ~waist, y = ~height, opacity = 0.6) %>%
+  add_markers() 
+p
+```
+
+Adding the plane to the 3D plot
+
+```{r}
+summary(mod_mr)$coef
+x <- seq(25, 50, length = 70)
+y <- seq(60, 80, length = 70)
+plane <- outer(x, y, function(a, b){summary(mod_mr)$coef[1,1] + 
+    summary(mod_mr)$coef[2,1]*a + summary(mod_mr)$coef[3,1]*b})
+# draw the plane
+p %>%
+  add_surface(x = ~x, y = ~y, z = ~plane, showscale = FALSE)
+```
+
+## Example 9.1
+
+Read in the `Real_Estate.csv` data set and store the result in `re`.
+
+```{r}
+re <- read.csv("Real_Estate.csv") %>% 
+  clean_names()
+names(re)
+# Create age variable
+re <- re %>% 
+  mutate(age = 2022 - year)
+```
+
+Find the least squares equation for regressing `price` onto `living_area` and `bedrooms`.  Store the result of the the `lm()` call in `mod_re`.
+
+```{r}
+# Your Code Goes HERE
+
+```
+
+The least squares regression equation for regressing `price` onto `living_area` and `bedrooms` is $$\widehat{\text{price}} = xxx + xxx \times \text{living_area} -xxx \times\text{bedrooms}$$
+
+__________
+
+## What You Should Really Do First
+
+Explore the data!
+
+```{r, fig.width = 10, fig.height = 10}
+library(GGally)   # load GGally package
+ggpairs(data = re, 
+        columns = c("living_area", "age", "bedrooms", "price"),
+        aes(alpha = 0.01)) + 
+  theme_bw()
+```
+
+
+## Step-By-Step Example
+
+Read in the data set `Housing_prices.csv` and store the results in `hp`.
+
+```{r}
+hp <- read.csv("Housing_prices.csv") %>% 
+  clean_names()
+names(hp)
+```
+
+Explore the data!
+
+```{r, fig.width = 10, fig.height = 10}
+library(GGally)   # load GGally package
+ggpairs(data = hp, 
+        columns = c("living_area", "age", "bedrooms", "price"),
+        aes(alpha = 0.001)) + 
+  theme_bw()
+```
+
+Note: the scatterplot of `price` versus `age` is not linear!  To straighten the relationship, the book takes the `log10(age + 1)`.
+
+```{r}
+hp <- hp %>% 
+  mutate(log_age = log10(age + 1))
+ggpairs(data = hp, 
+        columns = c("living_area", "log_age", "bedrooms", "price"),
+        aes(alpha = 0.001)) + 
+  theme_bw()  
+```
+
+Find the least squares regression equation for regressing `price` onto `living_area`, `log_age`, and `bedrooms`.  Store the result of the `lm()` call in `mod_hp`.
+
+```{r}
+mod_hp <- lm(price ~ living_area + log_age + bedrooms, data = hp)
+summary(mod_hp)
+coef(mod_hp)
+```
+
+## Partial Regression Plots
+
+1. Compute the regression of $y$ on all the other $x$'s except $x_1$.
+2. Calculate the residuals from that regression.  Call then $e_{y.[1]}$ (Here the dot notation means "residuals after regression on" and the `[]` notation means "all but"). Thus the subscript says "residuals after regression on all but $x_1$."
+3. Compute the (possibly multiple) regression of $x_1$ on all the other $x$'s except $x_1$.
+4. Calculate the residuals from the regression.  Call them $e_{1.[1]}$.
+5. Plot $e_{y.[1]}$ versus $e_{1.[1]}$.  This is the partial regression plot.
+
+
+Create a partial regression plot for the coefficient of `height` in the multiple regression model `mod_mr`.
+
+```{r}
+# Recall mod_mr
+mod_mr <- lm(pct_bf ~ waist + height, data= bf)
+summary(mod_mr)
+```
+
+```{r}
+my.2 <- lm(pct_bf ~ waist, data = bf)
+ey.2 <- residuals(my.2)
+m2.2 <- lm(height ~ waist, data = bf)
+e2.2 <- residuals(m2.2)
+df <- data.frame(ey.2 = ey.2, e2.2 = e2.2)
+ggplot(data = df, aes(y = ey.2, x = e2.2)) + 
+  geom_point(color = "blue") + 
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_bw()
+coefficients(lm(ey.2 ~ e2.2))
+```
+
+Using the `effects` package functions to create a similar plot.
+
+```{r}
+library(effects)
+e2 <- predictorEffect("height", mod_mr, residuals = TRUE)
+plot(e2)
+```
+
+Create a partial regression plot for the variable `waist` in the multiple regression model `mod_mr`.
+
+```{r}
+# Your Code Goes HERE
+
+```
+
+Use the `effects` package to create a similar plot.
+
+```{r}
+# Your Code Goes HERE
+
+```
+
+Note that the `preditorEffect()` changes to `preditorEffects()` when not specifying the variable for a single partial plot.  See the vignettes from package `effects` for more details on the available arguments for the `predictorEffect()` and `predictorEffects()` functions.
+
+
+```{r, fig.width = 8, fig.height = 4}
+plot(predictorEffects(mod_mr, residuals = TRUE))
+```
+
+## Indicator Variables
+
+Read in the `Coasters_2015.csv` data set and store the results in `coasters`.
+
+```{r}
+coasters <- read.csv("Coasters_2015.csv") %>% 
+  clean_names()
+names(coasters)
+```
+
+Create a subset of `coasters` named `sub` where only rows where neither the `duration` nor the `drop` is missing.  Also remove the `Tower of Terror` and `Xcelerator` coasters as `Tower of Terror` has been discontinued and the `Xcelerator` uses a different method of acceleration so its largest drop is not the source of speed. 
+
+```{r}
+sub <- coasters %>% 
+  filter(!is.na(duration) & !is.na(drop)) %>% 
+  filter(name != "Tower of Terror" & name != "Xcelerator")
+knitr::kable(head(sub))
+```
+
+Currently, `inversions` is a numerical variable with two values (0 and 1).  Make `inversions` a categorical variable with values `No` and `Yes` corresponding to the 0s and 1s.
+
+```{r}
+sub <- sub %>% 
+  mutate(inversions = ifelse(inversions == 0, "No", "Yes"))
+knitr::kable(head(sub))
+```
+
+Create a scatterplot of `duration` versus `drop` color coded by `inversions` using the data in `sub`.
+
+```{r}
+# Your Code Goes HERE
+
+```
+
+```{r}
+ggplot(data = sub, aes(x = drop, y = duration, color = inversions)) + 
+  geom_point() + 
+  theme_bw() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(color = "Inversion Legend")
+```
+
+Consider the regression model which graphs the lines in the previous plot:
+
+```{r}
+mod_iv <- lm(duration ~ drop + inversions + drop:inversions, data = sub)
+summary(mod_iv)
+coefficients(mod_iv)
+```
+
+```{r}
+# Intercept for Inversions
+coefficients(mod_iv)[1] + coefficients(mod_iv)[3]
+# Slope for Inversions
+coefficients(mod_iv)[2] + coefficients(mod_iv)[4]
+# Intercept for No Inversions
+coefficients(mod_iv)[1]
+# SLope for No Inversions
+coefficients(mod_iv)[2]
+```
+
+Consider a simpler model that has the same slope and a different intercept for the coasters that have inversions and those that do not have inversions.  This model is called a **parallel slopes model**.
+
+```{r}
+mod_ps <- lm(duration ~ drop + inversions, data = sub)
+summary(mod_ps)
+```
+
+To graph a parallel slopes model with `ggplot()` we will use the `geom_parallel_slopes()` function from the `moderndive` package.
+
+```{r}
+library(moderndive)
+ggplot(data = sub, aes(x = drop, y = duration, color = inversions)) + 
+  geom_point() + 
+  geom_parallel_slopes(se = FALSE) + 
+  theme_bw()
+```
+
+Use `mod_ps` to predict the `duration` of `Hangman` and `Hayabusa`.  Note that there are typos in the book for the prediction of `Hayabusa`.  
+
+```{r}
+sub %>% 
+  filter(name == "Hangman" | name == "Hayabusa") %>% 
+  knitr::kable()
+```
+
+```{r}
+hayabusaD <- predict(mod_ps, newdata = data.frame(drop = 124.67, inversions = "No"))
+hayabusaD
+hangmanD <- predict(mod_ps, newdata = data.frame(drop = 95, inversions = "Yes"))
+hangmanD
+```
+
+
